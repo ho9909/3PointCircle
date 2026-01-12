@@ -12,7 +12,7 @@ class CMy3PointCircleDlg : public CDialogEx
 {
 // 생성입니다.
 public:
-	CMy3PointCircleDlg(CWnd* pParent = nullptr);	// 표준 생성자입니다.
+	CMy3PointCircleDlg(CWnd* pParent = nullptr);	// 표준 생성자
 
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
@@ -20,26 +20,30 @@ public:
 #endif
 
 	protected:
-	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 지원입니다.
+	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 지원
 
 
-// 구현입니다.
+
 protected:
 	HICON m_hIcon;
 
 	CPoint m_ptClicks[3];       // 클릭한 3개의 좌표
 	int m_iClickCount;          // 현재 클릭된 횟수 (0~3)
 
-	int m_iRadius;
-	int m_iThickness;
-
-
 	int m_iPointRadius;         // 클릭 지점 원의 반지름 (사용자 입력)
 	int m_iLineThickness;       // 정원 가장자리 두께 (사용자 입력)
+
+	bool m_bIsDragging;        // 드래그 중인지 여부
+	int m_iDragPointIndex;     // 드래그 중인 점의 인덱스 (0, 1, 2)
+	bool m_bThreadRunning;
+
+	static UINT RandomMoveThread(LPVOID pParam); //스레드 함수
 
 	bool GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint& outCenter, double& outRadius);
 	void DrawCustomCircle(CDC* pDC, CPoint center, double radius, int thickness, bool bFill);
 
+
+	void UpdateCoordUI();
 	// 생성된 메시지 맵 함수
 	virtual BOOL OnInitDialog();
 	afx_msg void OnPaint();

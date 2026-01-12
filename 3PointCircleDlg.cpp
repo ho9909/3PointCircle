@@ -19,8 +19,8 @@ const double PI = 3.14159265358979323846;
 
 CMy3PointCircleDlg::CMy3PointCircleDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MY3POINTCIRCLE_DIALOG, pParent)
-	, m_iPointRadius(10)      // 변수명 확인: m_iPointRadius
-	, m_iLineThickness(2)     // 변수명 확인: m_iLineThickness
+	, m_iPointRadius(10)      
+	, m_iLineThickness(2)     
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_iClickCount = 0;
@@ -49,8 +49,8 @@ END_MESSAGE_MAP()
 BOOL CMy3PointCircleDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정합니다.
-	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
+	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정
+	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정
 
 	return TRUE;
 }
@@ -62,7 +62,6 @@ void CMy3PointCircleDlg::DrawCustomCircle(CDC* pDC, CPoint center, double radius
 
 	if (bFill)
 	{
-		// [업그레이드된 로직] 중간점 원 알고리즘을 이용한 채우기
 		// 원의 대칭성을 이용하여 1/8만 계산하고 나머지는 대칭으로 그립니다.
 		int x = 0;
 		int y = (int)radius;
@@ -85,7 +84,7 @@ void CMy3PointCircleDlg::DrawCustomCircle(CDC* pDC, CPoint center, double radius
 				p += 2 * (x - y) + 1;
 			}
 
-			// 계산된 점을 기준으로 대칭되는 4개의 가로선을 그어 내부를 채웁니다.
+			// 계산된 점을 기준으로 대칭되는 4개의 가로선을 그어 내부를 채우기
 			// 상단, 하단 부분 채우기
 			pDC->MoveTo(center.x - x, center.y + y);
 			pDC->LineTo(center.x + x, center.y + y);
@@ -118,7 +117,6 @@ void CMy3PointCircleDlg::DrawCustomCircle(CDC* pDC, CPoint center, double radius
 	pDC->SelectObject(pOldPen);
 }
 
-// [수정 포인트 1] double outRadius -> double& outRadius (참조자 & 추가 필수!)
 bool CMy3PointCircleDlg::GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint& outCenter, double& outRadius) {
 	double x1 = p1.x; double y1 = p1.y;
 	double x2 = p2.x; double y2 = p2.y;
@@ -137,7 +135,6 @@ bool CMy3PointCircleDlg::GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint
 
 	return true;
 }
-
 
 void CMy3PointCircleDlg::OnPaint()
 {
@@ -159,7 +156,6 @@ void CMy3PointCircleDlg::OnPaint()
 
 		// 점 그리기
 		for (int i = 0; i < m_iClickCount; i++) {
-			// [수정 포인트 2] m_iRadius -> m_iPointRadius (변수명 일치)
 			DrawCustomCircle(&dc, m_ptClicks[i], m_iPointRadius, 1, true);
 		}
 
@@ -168,16 +164,14 @@ void CMy3PointCircleDlg::OnPaint()
 			CPoint center;
 			double radius = 0;
 			if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, radius)) {
-				// [수정 포인트 2] m_iThickness -> m_iLineThickness (변수명 일치)
+
 				DrawCustomCircle(&dc, center, radius, m_iLineThickness, false);
 
-				// 좌표값 출력
 				CString str;
 				str.Format(_T("Center(%d,%d) R:%.1f"), center.x, center.y, radius);
 				GetDlgItem(IDC_STATIC_COORD)->SetWindowText(str);
 			}
 		}
-		// [수정 포인트 3] CDialogEx::OnPaint() 삭제함 (화면 덮어쓰기 방지)
 	}
 }
 
@@ -191,6 +185,18 @@ void CMy3PointCircleDlg::OnLButtonDown(UINT nFlags, CPoint point)
 {
 	UpdateData(TRUE); // 입력창 값 가져오기
 
+	if (m_iClickCount == 3) {
+		for (int i = 0; i < 3; i++) {
+			double dist = sqrt(pow(point.x - m_ptClicks[i].x, 2) + pow(point.y - m_ptClicks[i].y, 2));
+			if (dist <= m_iPointRadius + 5) {
+				m_iDragPointIndex = i;
+				m_bIsDragging = true;
+				SetCapture();
+				return;
+			}
+		}
+	}
+		
 	if (m_iClickCount < 3)
 	{
 		m_ptClicks[m_iClickCount] = point;
@@ -201,21 +207,80 @@ void CMy3PointCircleDlg::OnLButtonDown(UINT nFlags, CPoint point)
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
 
-// 아래는 3일차에 구현할 빈 함수들 (그대로 둠)
 void CMy3PointCircleDlg::OnLButtonUp(UINT nFlags, CPoint point)
 {
+	if (m_bIsDragging) {
+		m_bIsDragging = false;
+		m_iDragPointIndex = -1;
+		ReleaseCapture();
+	}
 	CDialogEx::OnLButtonUp(nFlags, point);
 }
 
 void CMy3PointCircleDlg::OnMouseMove(UINT nFlags, CPoint point)
 {
+	if (m_bIsDragging && m_iDragPointIndex != -1) {
+		m_ptClicks[m_iDragPointIndex] = point;
+		Invalidate();
+	}
 	CDialogEx::OnMouseMove(nFlags, point);
 }
 
 void CMy3PointCircleDlg::OnBnClickedBtnReset()
 {
+	m_iClickCount = 0;
+	m_bIsDragging = false;
+	m_iDragPointIndex = -1;
+	m_bThreadRunning = false;
+	GetDlgItem(IDC_STATIC_COORD)->SetWindowText(_T("초기화"));
+	Invalidate();
+
 }
 
 void CMy3PointCircleDlg::OnBnClickedBtnRandom()
 {
+	if (m_iClickCount < 3)return;
+	if (m_bThreadRunning)return;
+
+	m_bThreadRunning = true;
+	AfxBeginThread(RandomMoveThread, this); // 스레드
+}
+
+UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
+	CMy3PointCircleDlg* pDlg = (CMy3PointCircleDlg*)pParam;
+	CRect rect;
+	pDlg->GetClientRect(&rect);
+
+	for (int i = 0; i < 10; i++) {
+		if (!pDlg->m_bThreadRunning) {
+			break;
+		}
+
+		for (int j = 0; j < 3; j++) {
+			pDlg->m_ptClicks[j].x = rand() % (rect.Width() - 50) + 25;
+			pDlg->m_ptClicks[j].y = rand() % (rect.Height() - 50) + 25;
+		}
+		pDlg->Invalidate();
+		Sleep(500);
+	}
+	pDlg->m_bThreadRunning = false;
+	return 0;
+}
+
+void CMy3PointCircleDlg::UpdateCoordUI()
+{
+	CString s;
+	if (m_iClickCount >= 1) s.AppendFormat(L"P1: (%d, %d)\r\n", m_ptClicks[0].x, m_ptClicks[0].y);
+	if (m_iClickCount >= 2) s.AppendFormat(L"P2: (%d, %d)\r\n", m_ptClicks[1].x, m_ptClicks[1].y);
+	if (m_iClickCount >= 3) s.AppendFormat(L"P3: (%d, %d)\r\n", m_ptClicks[2].x, m_ptClicks[2].y);
+
+	if (m_iClickCount == 3) {
+		CPoint center; double r = 0;
+		if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, r))
+			s.AppendFormat(L"Circle: Center(%d,%d) R: %.1f", center.x, center.y, r);
+		else
+			s.Append(L"Circle: 계산 불가(일직선)");
+	}
+
+	SetDlgItemText(IDC_STATIC_COORD, s);
 }
