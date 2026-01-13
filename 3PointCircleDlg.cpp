@@ -489,7 +489,6 @@ LRESULT CMy3PointCircleDlg::OnUpdateRandomDone(WPARAM wParam, LPARAM lParam)
 
 	// 스레드 핸들 정리는 Reset이나 다음 Random 실행 시, 
 	// 혹은 Timer를 잠깐 돌려서 처리할 수도 있음.
-	// Day 5 단계에서는 일단 상태 변수만 꺼줘도 충분함.
 
 	// 더 완벽하게 하려면 여기서도 타이머를 켜서 delete m_pRandomThread를 수행하게 하면 됨.
 	SetTimer(TIMER_THREAD_CLEANUP, 50, NULL);
