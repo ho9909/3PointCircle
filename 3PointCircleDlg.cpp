@@ -39,6 +39,7 @@ void CMy3PointCircleDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CMy3PointCircleDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_WM_ERASEBKGND() // 배경 지우기
 	ON_WM_LBUTTONDOWN()
 	ON_WM_LBUTTONUP()
 	ON_WM_MOUSEMOVE()
@@ -56,6 +57,11 @@ BOOL CMy3PointCircleDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정
 
 	return TRUE;
+}
+
+BOOL CMy3PointCircleDlg::OnEraseBkgnd(CDC* pDC) { 
+	//return CDialogEx::OnEraseBkgnd(pDC);
+	return TRUE; 
 }
 
 // [추가 1] 테두리 그리기 (Midpoint Circle Algorithm)
@@ -185,26 +191,56 @@ void CMy3PointCircleDlg::OnPaint()
 	}
 	else
 	{
-		CPaintDC dc(this);
+		// [Day 3 핵심] 더블 버퍼링 로직 시작
+		CPaintDC dc(this); // 실제 화면 DC
 
-		// [변경] 점 그리기 -> DrawFilledCircle 사용 (속도 빠름)
+		CRect rcClient;
+		GetClientRect(&rcClient);
+
+		// 2. 가상 화면(메모리 DC) 만들기
+		CDC memDC;
+		memDC.CreateCompatibleDC(&dc); // 화면과 호환되는 메모리 DC 생성
+
+		// 3. 도화지(비트맵) 만들기
+		CBitmap bitmap;
+		bitmap.CreateCompatibleBitmap(&dc, rcClient.Width(), rcClient.Height());
+		CBitmap* pOldBitmap = memDC.SelectObject(&bitmap); // 메모리 DC에 도화지 끼우기
+
+		// 4. 가상 화면을 흰색으로 지우기 (배경색 칠하기)
+		// OnEraseBkgnd를 막았으니 여기서 우리가 직접 지워줘야 함
+		memDC.FillSolidRect(&rcClient, RGB(255, 255, 255));
+
+		// 5. 그림 그리기
+
+		// 점 그리기 (Day 2 함수 사용)
 		for (int i = 0; i < m_iClickCount; i++) {
-			DrawFilledCircle(&dc, m_ptClicks[i], m_iPointRadius, RGB(0, 0, 0));
+			DrawFilledCircle(&memDC, m_ptClicks[i], m_iPointRadius, RGB(0, 0, 0));
 		}
 
-		// [변경] 외접원 그리기 -> DrawThickCircle 사용 (정교한 두께)
+		// 외접원 그리기 (Day 2 함수 사용)
 		if (m_iClickCount == 3) {
 			CPoint center;
 			double radius = 0;
-			// GetCircumCircle은 Day 6 최종본의 fabs, sqrt 적용된 버전 사용
+
+			// GetCircumCircle은 Day 6 버전(표준함수)을 쓰거나 기존 것 유지
 			if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, radius)) {
+				DrawThickCircle(&memDC, center, (int)radius, m_iLineThickness);
 
-				// 여기서 새로운 함수 호출
-				DrawThickCircle(&dc, center, (int)radius, m_iLineThickness);
-
-				// 좌표 텍스트 갱신은 별도 함수(UpdateCoordUI)나 기존 방식 유지
+				// 좌표 텍스트는 여기서 그리지 않고 UpdateCoordUI()가 컨트롤에 텍스트를 세팅하는 방식 권장
+				// 만약 화면에 직접 글씨를 쓰고 싶다면:
+				// CString str;
+				// str.Format(_T("..."));
+				// memDC.TextOut(10, 10, str); 
 			}
 		}
+
+		// 6. 완성된 그림을 실제 화면으로 고속 복사 (BitBlt)
+		dc.BitBlt(0, 0, rcClient.Width(), rcClient.Height(), &memDC, 0, 0, SRCCOPY);
+
+		// 7. 자원 해제 (사용했던 비트맵 복구)
+		memDC.SelectObject(pOldBitmap);
+
+		// memDC, bitmap 등은 함수가 끝나면 자동으로 소멸됨
 	}
 }
 

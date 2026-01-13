@@ -67,5 +67,6 @@ protected:
 	afx_msg void OnBnClickedBtnReset();   // [초기화] 버튼
 	afx_msg void OnBnClickedBtnRandom();  // [랜덤 이동] 버튼
 	afx_msg LRESULT OnUpdateRandomMove(WPARAM wParam, LPARAM lParam);
+	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	DECLARE_MESSAGE_MAP()
 };
