@@ -45,8 +45,15 @@ protected:
 
 	static UINT RandomMoveThread(LPVOID pParam); //스레드 함수
 
+
+	//void DrawCustomCircle(CDC* pDC, CPoint center, double radius, int thickness, bool bFill);
 	bool GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint& outCenter, double& outRadius);
-	void DrawCustomCircle(CDC* pDC, CPoint center, double radius, int thickness, bool bFill);
+
+	// 그리기 알고리즘 (성능 개선 및 품질 향상)
+	void DrawFilledCircle(CDC* pDC, CPoint center, int radius, COLORREF color);    // Scanline (속도 빠름)
+	void DrawMidpointCircle(CDC* pDC, CPoint center, int radius, COLORREF color);  // Midpoint (테두리 정교함)
+	void DrawThickCircle(CDC* pDC, CPoint center, int radius, int thickness);      // 두께 처리
+	
 
 
 	void UpdateCoordUI();

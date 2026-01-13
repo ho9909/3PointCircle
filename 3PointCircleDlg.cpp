@@ -23,6 +23,7 @@ CMy3PointCircleDlg::CMy3PointCircleDlg(CWnd* pParent /*=nullptr*/)
 	, m_iLineThickness(2)     
 	, m_bThreadRunning(false)
 	, m_bStopFlag(false)
+	, m_bIsDragging(false)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_iClickCount = 0;
@@ -57,67 +58,80 @@ BOOL CMy3PointCircleDlg::OnInitDialog()
 	return TRUE;
 }
 
-void CMy3PointCircleDlg::DrawCustomCircle(CDC* pDC, CPoint center, double radius, int thickness, bool bFill)
+// [추가 1] 테두리 그리기 (Midpoint Circle Algorithm)
+// 정수 연산만 사용하여 속도가 빠르고 픽셀이 정교함
+void CMy3PointCircleDlg::DrawMidpointCircle(CDC* pDC, CPoint center, int radius, COLORREF color)
 {
-	CPen pen(PS_SOLID, thickness, RGB(0, 0, 0));
+	int x = 0;
+	int y = radius;
+	int p = 1 - radius;
+
+	while (x <= y) {
+		// 8방향 대칭 점 찍기 (SetPixelV가 SetPixel보다 조금 더 빠름)
+		pDC->SetPixelV(center.x + x, center.y + y, color);
+		pDC->SetPixelV(center.x - x, center.y + y, color);
+		pDC->SetPixelV(center.x + x, center.y - y, color);
+		pDC->SetPixelV(center.x - x, center.y - y, color);
+		pDC->SetPixelV(center.x + y, center.y + x, color);
+		pDC->SetPixelV(center.x - y, center.y + x, color);
+		pDC->SetPixelV(center.x + y, center.y - x, color);
+		pDC->SetPixelV(center.x - y, center.y - x, color);
+
+		x++;
+		if (p < 0) {
+			p += 2 * x + 1;
+		}
+		else {
+			y--;
+			p += 2 * (x - y) + 1;
+		}
+	}
+}
+
+// [추가 2] 내부 채우기 (Scanline Fill Algorithm)
+// 점을 하나씩 찍는 대신, 가로선(LineTo)을 그어 속도를 극대화함
+void CMy3PointCircleDlg::DrawFilledCircle(CDC* pDC, CPoint center, int radius, COLORREF color)
+{
+	CPen pen(PS_SOLID, 1, color);
 	CPen* pOldPen = pDC->SelectObject(&pen);
 
-	if (bFill)
-	{
-		// 원의 대칭성을 이용하여 1/8만 계산하고 나머지는 대칭으로 그립니다.
-		int x = 0;
-		int y = (int)radius;
-		int p = 1 - (int)radius; // 초기 결정 파라미터
+	int x = 0;
+	int y = radius;
+	int p = 1 - radius;
 
-		// 중심선 그리기
-		pDC->MoveTo(center.x - y, center.y);
-		pDC->LineTo(center.x + y, center.y);
+	while (x <= y) {
+		// 좌우 대칭 점을 잇는 가로선을 그음
+		pDC->MoveTo(center.x - x, center.y + y); pDC->LineTo(center.x + x, center.y + y);
+		pDC->MoveTo(center.x - x, center.y - y); pDC->LineTo(center.x + x, center.y - y);
+		pDC->MoveTo(center.x - y, center.y + x); pDC->LineTo(center.x + y, center.y + x);
+		pDC->MoveTo(center.x - y, center.y - x); pDC->LineTo(center.x + y, center.y - x);
 
-		while (x < y)
-		{
-			x++;
-			if (p < 0)
-			{
-				p += 2 * x + 1;
-			}
-			else
-			{
-				y--;
-				p += 2 * (x - y) + 1;
-			}
-
-			// 계산된 점을 기준으로 대칭되는 4개의 가로선을 그어 내부를 채우기
-			// 상단, 하단 부분 채우기
-			pDC->MoveTo(center.x - x, center.y + y);
-			pDC->LineTo(center.x + x, center.y + y);
-			pDC->MoveTo(center.x - x, center.y - y);
-			pDC->LineTo(center.x + x, center.y - y);
-
-			// 좌측, 우측 부분 채우기
-			pDC->MoveTo(center.x - y, center.y + x);
-			pDC->LineTo(center.x + y, center.y + x);
-			pDC->MoveTo(center.x - y, center.y - x);
-			pDC->LineTo(center.x + y, center.y - x);
+		x++;
+		if (p < 0) {
+			p += 2 * x + 1;
+		}
+		else {
+			y--;
+			p += 2 * (x - y) + 1;
 		}
 	}
-	else
-	{
-		// 테두리만 그리는 경우 (큰 원) -> 기존 방식 유지하되 품질 향상
-		int segments = (int)(radius * 2.0);
-		if (segments < 60) segments = 60; // 최소 세그먼트 수를 늘려 더 부드럽게
-
-		double angleStep = 2 * PI / segments;
-
-		pDC->MoveTo((int)(center.x + radius), center.y);
-
-		for (int i = 1; i <= segments; ++i) {
-			double angle = i * angleStep;
-			pDC->LineTo((int)(center.x + radius * cos(angle)), (int)(center.y + radius * sin(angle)));
-		}
-	}
-
 	pDC->SelectObject(pOldPen);
 }
+
+// [추가 3] 두께 처리 (Thickness Logic)
+// 입력된 두께만큼 반지름을 조절하며 여러 번 그림
+void CMy3PointCircleDlg::DrawThickCircle(CDC* pDC, CPoint center, int radius, int thickness)
+{
+	// 중심 기준으로 안팎으로 퍼지게 계산
+	int start = -(thickness - 1) / 2;
+	for (int k = 0; k < thickness; ++k) {
+		int r = radius + start + k;
+		if (r > 0) {
+			DrawMidpointCircle(pDC, center, r, RGB(0, 0, 0));
+		}
+	}
+}
+
 
 bool CMy3PointCircleDlg::GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint& outCenter, double& outRadius) {
 	double x1 = p1.x; double y1 = p1.y;
@@ -138,6 +152,22 @@ bool CMy3PointCircleDlg::GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint
 	return true;
 }
 
+void CMy3PointCircleDlg::UpdateCoordUI()
+{
+	CString strVal, strTemp;
+	if (m_iClickCount >= 1) { strTemp.Format(_T("P1(%d, %d)  "), m_ptClicks[0].x, m_ptClicks[0].y); strVal += strTemp; }
+	if (m_iClickCount >= 2) { strTemp.Format(_T("P2(%d, %d)  "), m_ptClicks[1].x, m_ptClicks[1].y); strVal += strTemp; }
+	if (m_iClickCount >= 3) { strTemp.Format(_T("P3(%d, %d)\r\n"), m_ptClicks[2].x, m_ptClicks[2].y); strVal += strTemp; }
+	if (m_iClickCount == 3) {
+		CPoint center; double radius;
+		if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, radius)) {
+			strTemp.Format(_T("Center(%d, %d)  Radius: %.1f"), center.x, center.y, radius); strVal += strTemp;
+		}
+		else strVal += _T("일직선입니다 (원 불가)");
+	}
+	GetDlgItem(IDC_STATIC_COORD)->SetWindowText(strVal);
+}
+
 void CMy3PointCircleDlg::OnPaint()
 {
 	if (IsIconic())
@@ -151,27 +181,28 @@ void CMy3PointCircleDlg::OnPaint()
 		int x = (rect.Width() - cxIcon + 1) / 2;
 		int y = (rect.Height() - cyIcon + 1) / 2;
 		dc.DrawIcon(x, y, m_hIcon);
+		return;
 	}
 	else
 	{
 		CPaintDC dc(this);
 
-		// 점 그리기
+		// [변경] 점 그리기 -> DrawFilledCircle 사용 (속도 빠름)
 		for (int i = 0; i < m_iClickCount; i++) {
-			DrawCustomCircle(&dc, m_ptClicks[i], m_iPointRadius, 1, true);
+			DrawFilledCircle(&dc, m_ptClicks[i], m_iPointRadius, RGB(0, 0, 0));
 		}
 
-		// 외접원 그리기
+		// [변경] 외접원 그리기 -> DrawThickCircle 사용 (정교한 두께)
 		if (m_iClickCount == 3) {
 			CPoint center;
 			double radius = 0;
+			// GetCircumCircle은 Day 6 최종본의 fabs, sqrt 적용된 버전 사용
 			if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, radius)) {
 
-				DrawCustomCircle(&dc, center, radius, m_iLineThickness, false);
+				// 여기서 새로운 함수 호출
+				DrawThickCircle(&dc, center, (int)radius, m_iLineThickness);
 
-				CString str;
-				str.Format(_T("Center(%d,%d) R:%.1f"), center.x, center.y, radius);
-				GetDlgItem(IDC_STATIC_COORD)->SetWindowText(str);
+				// 좌표 텍스트 갱신은 별도 함수(UpdateCoordUI)나 기존 방식 유지
 			}
 		}
 	}
