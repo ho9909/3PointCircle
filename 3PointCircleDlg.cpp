@@ -21,6 +21,8 @@ CMy3PointCircleDlg::CMy3PointCircleDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MY3POINTCIRCLE_DIALOG, pParent)
 	, m_iPointRadius(10)      
 	, m_iLineThickness(2)     
+	, m_bThreadRunning(false)
+	, m_bStopFlag(false)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_iClickCount = 0;
@@ -252,35 +254,29 @@ UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 	pDlg->GetClientRect(&rect);
 
 	for (int i = 0; i < 10; i++) {
-		if (!pDlg->m_bThreadRunning) {
+		if (!pDlg->m_bStopFlag.load()) {
 			break;
 		}
+		RandomMovePayload* pData = new RandomMovePayload();
 
 		for (int j = 0; j < 3; j++) {
 			pDlg->m_ptClicks[j].x = rand() % (rect.Width() - 50) + 25;
 			pDlg->m_ptClicks[j].y = rand() % (rect.Height() - 50) + 25;
 		}
-		pDlg->Invalidate();
+		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_MOVE, 0, (LPARAM)pData);
 		Sleep(500);
 	}
 	pDlg->m_bThreadRunning = false;
 	return 0;
 }
 
-void CMy3PointCircleDlg::UpdateCoordUI()
-{
-	CString s;
-	if (m_iClickCount >= 1) s.AppendFormat(L"P1: (%d, %d)\r\n", m_ptClicks[0].x, m_ptClicks[0].y);
-	if (m_iClickCount >= 2) s.AppendFormat(L"P2: (%d, %d)\r\n", m_ptClicks[1].x, m_ptClicks[1].y);
-	if (m_iClickCount >= 3) s.AppendFormat(L"P3: (%d, %d)\r\n", m_ptClicks[2].x, m_ptClicks[2].y);
+LRESULT CMy3PointCircleDlg::OnUpdateRandomMove(WPARAM wParam, LPARAM lParam) {
+	RandomMovePayload* pData = (RandomMovePayload*)lParam;
+	if (!pData) return 0;
+	if (m_bStopFlag.load()) { delete pData; return 0; }
 
-	if (m_iClickCount == 3) {
-		CPoint center; double r = 0;
-		if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, r))
-			s.AppendFormat(L"Circle: Center(%d,%d) R: %.1f", center.x, center.y, r);
-		else
-			s.Append(L"Circle: 계산 불가(일직선)");
-	}
-
-	SetDlgItemText(IDC_STATIC_COORD, s);
+	for (int i = 0; i < 3; i++) m_ptClicks[i] = pData->pts[i];
+	delete pData;
+	Invalidate();
+	return 0;
 }

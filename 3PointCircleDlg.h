@@ -4,8 +4,12 @@
 
 #pragma once
 #include "afxwin.h"
+#include <atomic>
 
 #define WM_UPDATE_RANDOM_MOVE (WM_USER + 1)
+
+struct RandomMovePayload { CPoint pts[3]; };
+
 
 // CMy3PointCircleDlg 대화 상자
 class CMy3PointCircleDlg : public CDialogEx
@@ -35,7 +39,9 @@ protected:
 
 	bool m_bIsDragging;        // 드래그 중인지 여부
 	int m_iDragPointIndex;     // 드래그 중인 점의 인덱스 (0, 1, 2)
-	bool m_bThreadRunning;
+	//bool m_bThreadRunning;
+	std::atomic<bool> m_bThreadRunning;
+	std::atomic<bool> m_bStopFlag;
 
 	static UINT RandomMoveThread(LPVOID pParam); //스레드 함수
 
@@ -53,5 +59,6 @@ protected:
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnBnClickedBtnReset();   // [초기화] 버튼
 	afx_msg void OnBnClickedBtnRandom();  // [랜덤 이동] 버튼
+	afx_msg LRESULT OnUpdateRandomMove(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
 };
