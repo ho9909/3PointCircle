@@ -45,7 +45,8 @@ BEGIN_MESSAGE_MAP(CMy3PointCircleDlg, CDialogEx)
 	ON_WM_MOUSEMOVE()
 	ON_BN_CLICKED(IDC_BTN_RESET, &CMy3PointCircleDlg::OnBnClickedBtnReset)
 	ON_BN_CLICKED(IDC_BTN_RANDOM, &CMy3PointCircleDlg::OnBnClickedBtnRandom)
-
+	ON_WM_TIMER()
+	ON_MESSAGE(WM_UPDATE_RANDOM_DONE, &CMy3PointCircleDlg::OnUpdateRandomDone)
 	ON_MESSAGE(WM_UPDATE_RANDOM_MOVE, &CMy3PointCircleDlg::OnUpdateRandomMove)
 
 END_MESSAGE_MAP()
@@ -308,9 +309,23 @@ void CMy3PointCircleDlg::OnBnClickedBtnReset()
 	m_iClickCount = 0;
 	m_bIsDragging = false;
 	m_iDragPointIndex = -1;
-	m_bThreadRunning = false;
 	GetDlgItem(IDC_STATIC_COORD)->SetWindowText(_T("초기화"));
 	Invalidate();
+
+	if (m_pRandomThread) {
+		DWORD result = WaitForSingleObject(m_pRandomThread->m_hThread, 0);
+
+		if (result == WAIT_OBJECT_0) {
+			// 이미 죽어있으면 바로 삭제
+			delete m_pRandomThread;
+			m_pRandomThread = nullptr;
+			m_bThreadRunning = false;
+		}
+		else {
+			// 아직 살아있으면 타이머(감시자)를 고용함 (50ms마다 확인)
+			SetTimer(TIMER_THREAD_CLEANUP, 50, NULL);
+		}
+	}
 
 }
 
@@ -327,11 +342,14 @@ UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 	CMy3PointCircleDlg* pDlg = (CMy3PointCircleDlg*)pParam;
 	CRect rect;
 	pDlg->GetClientRect(&rect);
-
 	int margin = pDlg->m_iPointRadius + 2;
 	int xMin = rect.left + margin;
 	int xMax = rect.right - margin;
+	
 
+	if (rect.Width() < 10 || rect.Height() < 10) {
+		return 0;
+	}
 
 	for (int i = 0; i < 10; i++) {
 		if (pDlg->m_bStopFlag.load()) {
@@ -344,9 +362,18 @@ UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 			pData->pts[j].y = rand() % (rect.Height() - 50) + 25;
 		}
 		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_MOVE, 0, (LPARAM)pData);
-		Sleep(500);
+		//Sleep(500);
+		for (int t = 0; t < 50; t++) {
+			if (pDlg->m_bStopFlag.load()) break;
+			Sleep(10);
+		}
 	}
-	pDlg->m_bThreadRunning = false;
+	if (::IsWindow(pDlg->m_hWnd))
+	{
+		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_DONE, 0, 0);
+	}
+
+	//pDlg->m_bThreadRunning = false;
 	return 0;
 }
 
@@ -417,4 +444,55 @@ CRect CMy3PointCircleDlg::GetDrawRect()
 	else {
 		return rcBottom;
 	}
+}
+
+
+void CMy3PointCircleDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == TIMER_THREAD_CLEANUP) {
+		// 스레드가 존재하는지 확인
+		if (m_pRandomThread) {
+			// 죽었는지 확인 (기다리지 않음, 0초 체크)
+			DWORD result = WaitForSingleObject(m_pRandomThread->m_hThread, 0);
+
+			if (result == WAIT_OBJECT_0) {
+				// 죽었으면 메모리 해제
+				delete m_pRandomThread;
+				m_pRandomThread = nullptr;
+				m_bThreadRunning = false;
+				m_bStopFlag.store(false); // 플래그 초기화
+
+				KillTimer(TIMER_THREAD_CLEANUP); // 임무 완료했으니 타이머 종료
+
+				// 랜덤 버튼 다시 활성화 (필요하다면)
+				// GetDlgItem(IDC_BTN_RANDOM)->EnableWindow(TRUE);
+			}
+		}
+		else {
+			// 스레드 객체가 없으면 타이머도 필요 없음
+			KillTimer(TIMER_THREAD_CLEANUP);
+		}
+	}
+
+	CDialogEx::OnTimer(nIDEvent);
+}
+
+LRESULT CMy3PointCircleDlg::OnUpdateRandomDone(WPARAM wParam, LPARAM lParam)
+{
+	// 스레드가 정상 종료되었음을 표시
+	// 실제 메모리 해제는 여기서 바로 Wait를 걸거나,
+	// 다음번 실행 때 처리하도록 둘 수 있음.
+
+	// 여기서는 간단하게 "실행 중 아님" 상태로 변경
+	m_bThreadRunning = false;
+	m_bStopFlag.store(false);
+
+	// 스레드 핸들 정리는 Reset이나 다음 Random 실행 시, 
+	// 혹은 Timer를 잠깐 돌려서 처리할 수도 있음.
+	// Day 5 단계에서는 일단 상태 변수만 꺼줘도 충분함.
+
+	// 더 완벽하게 하려면 여기서도 타이머를 켜서 delete m_pRandomThread를 수행하게 하면 됨.
+	SetTimer(TIMER_THREAD_CLEANUP, 50, NULL);
+
+	return 0;
 }

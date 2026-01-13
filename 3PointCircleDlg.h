@@ -7,6 +7,9 @@
 #include <atomic>
 
 #define WM_UPDATE_RANDOM_MOVE (WM_USER + 1)
+#define WM_UPDATE_RANDOM_DONE (WM_USER +2)
+#define TIMER_THREAD_CLEANUP 999
+
 
 struct RandomMovePayload { CPoint pts[3]; };
 
@@ -40,6 +43,8 @@ protected:
 	bool m_bIsDragging;        // 드래그 중인지 여부
 	int m_iDragPointIndex;     // 드래그 중인 점의 인덱스 (0, 1, 2)
 	//bool m_bThreadRunning;
+
+	CWinThread* m_pRandomThread;        // 스레드 핸들 관리
 	std::atomic<bool> m_bThreadRunning;
 	std::atomic<bool> m_bStopFlag;
 
@@ -72,5 +77,7 @@ protected:
 	afx_msg void OnBnClickedBtnRandom();  // [랜덤 이동] 버튼
 	afx_msg LRESULT OnUpdateRandomMove(WPARAM wParam, LPARAM lParam);
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg LRESULT OnUpdateRandomDone(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
 };
