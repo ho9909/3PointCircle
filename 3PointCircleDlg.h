@@ -43,6 +43,10 @@ protected:
 	std::atomic<bool> m_bThreadRunning;
 	std::atomic<bool> m_bStopFlag;
 
+	//화면 영역 캐싱 변수 및 함수
+	CRect m_rcDraw;      // 그림이 그려질 안전한 영역
+	CRect GetDrawRect(); // 컨트롤을 피해서 그리기 영역을 계산하는 함수
+
 	static UINT RandomMoveThread(LPVOID pParam); //스레드 함수
 
 

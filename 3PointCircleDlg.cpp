@@ -45,6 +45,9 @@ BEGIN_MESSAGE_MAP(CMy3PointCircleDlg, CDialogEx)
 	ON_WM_MOUSEMOVE()
 	ON_BN_CLICKED(IDC_BTN_RESET, &CMy3PointCircleDlg::OnBnClickedBtnReset)
 	ON_BN_CLICKED(IDC_BTN_RANDOM, &CMy3PointCircleDlg::OnBnClickedBtnRandom)
+
+	ON_MESSAGE(WM_UPDATE_RANDOM_MOVE, &CMy3PointCircleDlg::OnUpdateRandomMove)
+
 END_MESSAGE_MAP()
 
 
@@ -266,13 +269,18 @@ void CMy3PointCircleDlg::OnLButtonDown(UINT nFlags, CPoint point)
 		}
 	}
 		
-	if (m_iClickCount < 3)
-	{
-		m_ptClicks[m_iClickCount] = point;
-		m_iClickCount++;
-		Invalidate(); // 화면 갱신 요청
-	}
+	if (m_iClickCount < 3) {
+		//클릭한 곳이 그리기 영역 안인지 체크
+		CRect validRect = GetDrawRect();
+		if (validRect.PtInRect(point)) {
+			m_ptClicks[m_iClickCount] = point;
+			m_iClickCount++;
+			UpdateCoordUI();
 
+			// [최적화] 전체 화면 갱신 대신 그리기 영역만 갱신
+			InvalidateRect(&validRect, FALSE);
+		}
+	}
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
 
@@ -320,15 +328,20 @@ UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 	CRect rect;
 	pDlg->GetClientRect(&rect);
 
+	int margin = pDlg->m_iPointRadius + 2;
+	int xMin = rect.left + margin;
+	int xMax = rect.right - margin;
+
+
 	for (int i = 0; i < 10; i++) {
-		if (!pDlg->m_bStopFlag.load()) {
+		if (pDlg->m_bStopFlag.load()) {
 			break;
 		}
 		RandomMovePayload* pData = new RandomMovePayload();
 
 		for (int j = 0; j < 3; j++) {
-			pDlg->m_ptClicks[j].x = rand() % (rect.Width() - 50) + 25;
-			pDlg->m_ptClicks[j].y = rand() % (rect.Height() - 50) + 25;
+			pData->pts[j].x = rand() % (rect.Width() - 50) + 25;
+			pData->pts[j].y = rand() % (rect.Height() - 50) + 25;
 		}
 		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_MOVE, 0, (LPARAM)pData);
 		Sleep(500);
@@ -346,4 +359,62 @@ LRESULT CMy3PointCircleDlg::OnUpdateRandomMove(WPARAM wParam, LPARAM lParam) {
 	delete pData;
 	Invalidate();
 	return 0;
+}
+
+CRect CMy3PointCircleDlg::GetDrawRect()
+{
+	CRect rcClient;
+	GetClientRect(&rcClient);
+
+	// 1. 피해 다녀야 할 컨트롤들의 ID 목록
+	// (리소스 편집기에서 만든 ID들과 일치해야 함)
+	int ctrlIDs[] = {
+		IDC_BTN_RESET, IDC_BTN_RANDOM,
+		IDC_EDIT_RADIUS, IDC_EDIT_THICKNESS,
+		IDC_STATIC_COORD
+	};
+
+	CRect rcControlsUnion(0, 0, 0, 0); // 컨트롤들이 차지하는 전체 영역
+	bool bFirst = true;
+
+	// 2. 모든 컨트롤의 영역을 합침 (Union)
+	for (int id : ctrlIDs) {
+		CWnd* pWnd = GetDlgItem(id);
+		if (pWnd && pWnd->GetSafeHwnd()) {
+			CRect rcCtrl;
+			pWnd->GetWindowRect(&rcCtrl);
+			ScreenToClient(&rcCtrl); // 화면 좌표 -> 클라이언트 좌표 변환
+
+			if (bFirst) {
+				rcControlsUnion = rcCtrl;
+				bFirst = false;
+			}
+			else {
+				rcControlsUnion.UnionRect(&rcControlsUnion, &rcCtrl);
+			}
+		}
+	}
+
+	// 컨트롤이 하나도 없으면 전체 영역 반환
+	if (bFirst) return rcClient;
+
+	// 3. 그리기 영역 결정 (컨트롤 영역을 제외한 빈 공간)
+	// 여기서는 컨트롤들이 '아래쪽'이나 '위쪽'에 몰려있다고 가정하고
+	// 가장 넓은 세로 공간을 선택하는 로직입니다.
+
+	// 후보 1: 컨트롤들의 위쪽 공간
+	CRect rcTop = rcClient;
+	rcTop.bottom = max(rcClient.top, rcControlsUnion.top - 10); // 10px 여유
+
+	// 후보 2: 컨트롤들의 아래쪽 공간
+	CRect rcBottom = rcClient;
+	rcBottom.top = min(rcClient.bottom, rcControlsUnion.bottom + 10);
+
+	// 더 넓은 쪽을 그리기 영역으로 선택
+	if (rcTop.Height() >= rcBottom.Height()) {
+		return rcTop;
+	}
+	else {
+		return rcBottom;
+	}
 }
