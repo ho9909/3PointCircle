@@ -59,8 +59,8 @@ protected:
 	bool GetCircumCircle(CPoint p1, CPoint p2, CPoint p3, CPoint& outCenter, double& outRadius);
 
 	// 그리기 알고리즘 (성능 개선 및 품질 향상)
-	void DrawFilledCircle(CDC* pDC, CPoint center, int radius, COLORREF color);    // Scanline (속도 빠름)
-	void DrawMidpointCircle(CDC* pDC, CPoint center, int radius, COLORREF color);  // Midpoint (테두리 정교함)
+	void DrawFilledCircle(CDC* pDC, CPoint center, int radius, COLORREF color);    // Scanline
+	void DrawMidpointCircle(CDC* pDC, CPoint center, int radius, COLORREF color);  // Midpoint
 	void DrawThickCircle(CDC* pDC, CPoint center, int radius, int thickness);      // 두께 처리
 	
 
@@ -73,8 +73,8 @@ protected:
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
-	afx_msg void OnBnClickedBtnReset();   // [초기화] 버튼
-	afx_msg void OnBnClickedBtnRandom();  // [랜덤 이동] 버튼
+	afx_msg void OnBnClickedBtnReset();   // 초기화 버튼
+	afx_msg void OnBnClickedBtnRandom();  // 랜덤 이동 버튼
 	afx_msg LRESULT OnUpdateRandomMove(WPARAM wParam, LPARAM lParam);
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);

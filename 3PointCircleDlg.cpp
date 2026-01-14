@@ -73,7 +73,7 @@ BOOL CMy3PointCircleDlg::OnEraseBkgnd(CDC* pDC) {
 	return TRUE; 
 }
 
-// [추가 1] 테두리 그리기 (Midpoint Circle Algorithm)
+// 테두리 그리기 (Midpoint Circle Algorithm)
 // 정수 연산만 사용하여 속도가 빠르고 픽셀이 정교함
 void CMy3PointCircleDlg::DrawMidpointCircle(CDC* pDC, CPoint center, int radius, COLORREF color)
 {
@@ -103,7 +103,7 @@ void CMy3PointCircleDlg::DrawMidpointCircle(CDC* pDC, CPoint center, int radius,
 	}
 }
 
-// [추가 2] 내부 채우기 (Scanline Fill Algorithm)
+// 내부 채우기 (Scanline Fill Algorithm)
 // 점을 하나씩 찍는 대신, 가로선(LineTo)을 그어 속도를 극대화함
 void CMy3PointCircleDlg::DrawFilledCircle(CDC* pDC, CPoint center, int radius, COLORREF color)
 {
@@ -133,7 +133,7 @@ void CMy3PointCircleDlg::DrawFilledCircle(CDC* pDC, CPoint center, int radius, C
 	pDC->SelectObject(pOldPen);
 }
 
-// [추가 3] 두께 처리 (Thickness Logic)
+// 두께 처리 (Thickness Logic)
 // 입력된 두께만큼 반지름을 조절하며 여러 번 그림
 void CMy3PointCircleDlg::DrawThickCircle(CDC* pDC, CPoint center, int radius, int thickness)
 {
@@ -200,7 +200,7 @@ void CMy3PointCircleDlg::OnPaint()
 	}
 	else
 	{
-		// [Day 3 핵심] 더블 버퍼링 로직 시작
+		// 더블 버퍼링 로직 시작
 		CPaintDC dc(this); // 실제 화면 DC
 
 		CRect rcClient;
@@ -221,12 +221,12 @@ void CMy3PointCircleDlg::OnPaint()
 
 		// 5. 그림 그리기
 
-		// 점 그리기 (Day 2 함수 사용)
+		// 점 그리기
 		for (int i = 0; i < m_iClickCount; i++) {
 			DrawFilledCircle(&memDC, m_ptClicks[i], m_iPointRadius, RGB(0, 0, 0));
 		}
 
-		// 외접원 그리기 (Day 2 함수 사용)
+		// 외접원 그리기
 		if (m_iClickCount == 3) {
 			CPoint center;
 			double radius = 0;
@@ -235,8 +235,6 @@ void CMy3PointCircleDlg::OnPaint()
 			if (GetCircumCircle(m_ptClicks[0], m_ptClicks[1], m_ptClicks[2], center, radius)) {
 				DrawThickCircle(&memDC, center, (int)radius, m_iLineThickness);
 
-				// 좌표 텍스트는 여기서 그리지 않고 UpdateCoordUI()가 컨트롤에 텍스트를 세팅하는 방식 권장
-				// 만약 화면에 직접 글씨를 쓰고 싶다면:
 				// CString str;
 				// str.Format(_T("..."));
 				// memDC.TextOut(10, 10, str); 
@@ -283,7 +281,7 @@ void CMy3PointCircleDlg::OnLButtonDown(UINT nFlags, CPoint point)
 			m_iClickCount++;
 			UpdateCoordUI();
 
-			// [최적화] 전체 화면 갱신 대신 그리기 영역만 갱신
+			//전체 화면 갱신 대신 그리기 영역만 갱신
 			InvalidateRect(&validRect, FALSE);
 		}
 	}
@@ -387,7 +385,7 @@ UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 			break;
 		}
 
-		// Sleep 쪼개기 (Day 5 코드 유지)
+		// Sleep 쪼개기
 		for (int t = 0; t < 50; t++) {
 			if (pDlg->m_bStopFlag.load()) break;
 			Sleep(10);
@@ -458,7 +456,7 @@ CRect CMy3PointCircleDlg::GetDrawRect()
 
 	// 3. 그리기 영역 결정 (컨트롤 영역을 제외한 빈 공간)
 	// 여기서는 컨트롤들이 '아래쪽'이나 '위쪽'에 몰려있다고 가정하고
-	// 가장 넓은 세로 공간을 선택하는 로직입니다.
+	// 가장 넓은 세로 공간을 선택하는 로직
 
 	// 후보 1: 컨트롤들의 위쪽 공간
 	CRect rcTop = rcClient;
@@ -544,7 +542,7 @@ void CMy3PointCircleDlg::OnDestroy()
 		m_pRandomThread = nullptr;
 	}
 
-	//[중요] 메시지 큐 청소
+	//메시지 큐 청소
 	// 스레드는 데이터를 보냈는데(PostMessage), 아직 처리가 안 돼서
 	// 공중에 떠 있는 메시지(Payload)가 있을 수 있음. 이걸 안 지우면 메모리 누수!
 	MSG msg;
