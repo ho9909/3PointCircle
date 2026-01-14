@@ -79,5 +79,6 @@ protected:
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg LRESULT OnUpdateRandomDone(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnDestroy();
 	DECLARE_MESSAGE_MAP()
 };

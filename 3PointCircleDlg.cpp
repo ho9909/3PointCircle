@@ -7,6 +7,8 @@
 #include "3PointCircleDlg.h"
 #include "afxdialogex.h"
 #include <cmath>
+#include <ctime>
+#include <cstdlib>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -43,12 +45,13 @@ BEGIN_MESSAGE_MAP(CMy3PointCircleDlg, CDialogEx)
 	ON_WM_LBUTTONDOWN()
 	ON_WM_LBUTTONUP()
 	ON_WM_MOUSEMOVE()
+	ON_WM_TIMER()
 	ON_BN_CLICKED(IDC_BTN_RESET, &CMy3PointCircleDlg::OnBnClickedBtnReset)
 	ON_BN_CLICKED(IDC_BTN_RANDOM, &CMy3PointCircleDlg::OnBnClickedBtnRandom)
-	ON_WM_TIMER()
 	ON_MESSAGE(WM_UPDATE_RANDOM_DONE, &CMy3PointCircleDlg::OnUpdateRandomDone)
 	ON_MESSAGE(WM_UPDATE_RANDOM_MOVE, &CMy3PointCircleDlg::OnUpdateRandomMove)
 
+	ON_WM_DESTROY()
 END_MESSAGE_MAP()
 
 
@@ -59,6 +62,8 @@ BOOL CMy3PointCircleDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정
+
+	std::srand((unsigned int)std::time(nullptr));
 
 	return TRUE;
 }
@@ -340,51 +345,77 @@ void CMy3PointCircleDlg::OnBnClickedBtnRandom()
 
 UINT CMy3PointCircleDlg::RandomMoveThread(LPVOID pParam) {
 	CMy3PointCircleDlg* pDlg = (CMy3PointCircleDlg*)pParam;
-	CRect rect;
-	pDlg->GetClientRect(&rect);
-	int margin = pDlg->m_iPointRadius + 2;
-	int xMin = rect.left + margin;
-	int xMax = rect.right - margin;
-	
 
+	// 스레드 종료 시 무조건 실행되어야 할 일을 람다로 정의
+	// (함수가 길어지거나 리턴 지점이 많아질 때 실수를 방지함)
+	auto PostDone = [&]() {
+		if (::IsWindow(pDlg->m_hWnd))
+			::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_DONE, 0, 0);
+		};
+
+	CRect rect = pDlg->GetDrawRect();
+
+	// 안전장치로 그릴 공간이 너무 작으면 즉시 종료 (버그 방지)
 	if (rect.Width() < 10 || rect.Height() < 10) {
+		PostDone(); // 버튼 복구 신호 보내고 종료
 		return 0;
 	}
 
+	int margin = pDlg->m_iPointRadius + 2;
+	int xMin = rect.left + margin;
+	int xMax = rect.right - margin;
+
+	// 만약 마진 때문에 범위가 꼬이면 보정
+	if (xMax <= xMin) { xMin = rect.left; xMax = rect.right; }
+
 	for (int i = 0; i < 10; i++) {
-		if (pDlg->m_bStopFlag.load()) {
+		if (pDlg->m_bStopFlag.load()) break;
+
+		RandomMovePayload* pData = new RandomMovePayload();
+		for (int j = 0; j < 3; j++) {
+			pData->pts[j].x = rand() % (max(1, xMax - xMin)) + xMin;
+			// Y좌표도 동일한 방식으로 안전하게 계산 (생략 가능하나 넣으면 좋음)
+			pData->pts[j].y = rand() % (rect.Height() - margin * 2) + rect.top + margin;
+		}
+
+		// 윈도우가 살아있을 때만 보냄
+		if (::IsWindow(pDlg->m_hWnd)) {
+			::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_MOVE, 0, (LPARAM)pData);
+		}
+		else {
+			delete pData; // 윈도우 없으면 그냥 삭제 (누수 방지)
 			break;
 		}
-		RandomMovePayload* pData = new RandomMovePayload();
 
-		for (int j = 0; j < 3; j++) {
-			pData->pts[j].x = rand() % (rect.Width() - 50) + 25;
-			pData->pts[j].y = rand() % (rect.Height() - 50) + 25;
-		}
-		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_MOVE, 0, (LPARAM)pData);
-		//Sleep(500);
+		// Sleep 쪼개기 (Day 5 코드 유지)
 		for (int t = 0; t < 50; t++) {
 			if (pDlg->m_bStopFlag.load()) break;
 			Sleep(10);
 		}
 	}
-	if (::IsWindow(pDlg->m_hWnd))
-	{
-		::PostMessage(pDlg->m_hWnd, WM_UPDATE_RANDOM_DONE, 0, 0);
-	}
 
-	//pDlg->m_bThreadRunning = false;
+	PostDone(); // 정상 종료 시에도 호출
 	return 0;
 }
 
 LRESULT CMy3PointCircleDlg::OnUpdateRandomMove(WPARAM wParam, LPARAM lParam) {
 	RandomMovePayload* pData = (RandomMovePayload*)lParam;
 	if (!pData) return 0;
-	if (m_bStopFlag.load()) { delete pData; return 0; }
+
+	//정지 신호가 켜져있거나 스레드가 끝난 상태면 데이터 무시
+	// (리셋 버튼 누른 직후에 날아온 유령 데이터 방지)
+	if (m_bStopFlag.load() || !m_bThreadRunning.load()) {
+		delete pData; // 메모리는 해제하고 적용은 안 함
+		return 0;
+	}
 
 	for (int i = 0; i < 3; i++) m_ptClicks[i] = pData->pts[i];
 	delete pData;
-	Invalidate();
+
+	// Day 4에서 만든 스마트 갱신
+	CRect r = GetDrawRect();
+	InvalidateRect(&r, FALSE);
+
 	return 0;
 }
 
@@ -494,4 +525,34 @@ LRESULT CMy3PointCircleDlg::OnUpdateRandomDone(WPARAM wParam, LPARAM lParam)
 	SetTimer(TIMER_THREAD_CLEANUP, 50, NULL);
 
 	return 0;
+}
+
+
+void CMy3PointCircleDlg::OnDestroy()
+{
+	// 1. 스레드에게 "멈춰" 신호 보냄
+	m_bStopFlag.store(true);
+
+	// 2. 타이머가 돌고 있다면 끔
+	KillTimer(TIMER_THREAD_CLEANUP);
+
+	// 3. 스레드가 완전히 죽을 때까지 기다림 (동기화)
+	// 창이 닫히는 중이므로 UI 멈춤(Freezing) 걱정 없이 INFINITE로 기다려도 됨
+	if (m_pRandomThread) {
+		WaitForSingleObject(m_pRandomThread->m_hThread, INFINITE);
+		delete m_pRandomThread;
+		m_pRandomThread = nullptr;
+	}
+
+	//[중요] 메시지 큐 청소
+	// 스레드는 데이터를 보냈는데(PostMessage), 아직 처리가 안 돼서
+	// 공중에 떠 있는 메시지(Payload)가 있을 수 있음. 이걸 안 지우면 메모리 누수!
+	MSG msg;
+	while (::PeekMessage(&msg, m_hWnd, WM_UPDATE_RANDOM_MOVE, WM_UPDATE_RANDOM_MOVE, PM_REMOVE)) {
+		// 메시지 큐에서 꺼내서, 안에 들어있는 Payload를 강제로 삭제
+		RandomMovePayload* pData = (RandomMovePayload*)msg.lParam;
+		if (pData) delete pData;
+	}
+
+	CDialogEx::OnDestroy();
 }
