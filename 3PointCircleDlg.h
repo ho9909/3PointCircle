@@ -41,6 +41,7 @@ protected:
 	int m_iLineThickness;       // 정원 가장자리 두께 (사용자 입력)
 
 	bool m_bIsDragging;        // 드래그 중인지 여부
+	int m_iDragIndex;
 	int m_iDragPointIndex;     // 드래그 중인 점의 인덱스 (0, 1, 2)
 	//bool m_bThreadRunning;
 

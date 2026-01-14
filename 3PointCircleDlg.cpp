@@ -259,40 +259,39 @@ HCURSOR CMy3PointCircleDlg::OnQueryDragIcon()
 
 void CMy3PointCircleDlg::OnLButtonDown(UINT nFlags, CPoint point)
 {
-	UpdateData(TRUE); // 입력창 값 가져오기
+	if (m_bThreadRunning.load()) return;
 
+	UpdateData(TRUE);
 	if (m_iClickCount == 3) {
 		for (int i = 0; i < 3; i++) {
-			double dist = sqrt(pow(point.x - m_ptClicks[i].x, 2) + pow(point.y - m_ptClicks[i].y, 2));
-			if (dist <= m_iPointRadius + 5) {
-				m_iDragPointIndex = i;
+			double dx = point.x - m_ptClicks[i].x;
+			double dy = point.y - m_ptClicks[i].y;
+			if (std::sqrt(dx * dx + dy * dy) <= m_iPointRadius + 5) {
+				m_iDragIndex = i;
 				m_bIsDragging = true;
 				SetCapture();
 				return;
 			}
 		}
+		return;
 	}
-		
 	if (m_iClickCount < 3) {
-		//클릭한 곳이 그리기 영역 안인지 체크
-		CRect validRect = GetDrawRect();
-		if (validRect.PtInRect(point)) {
-			m_ptClicks[m_iClickCount] = point;
-			m_iClickCount++;
-			UpdateCoordUI();
+		m_ptClicks[m_iClickCount] = point;
+		m_iClickCount++;
+		UpdateCoordUI();
 
-			//전체 화면 갱신 대신 그리기 영역만 갱신
-			InvalidateRect(&validRect, FALSE);
-		}
+		CRect r = GetDrawRect();
+		InvalidateRect(&r, FALSE);
 	}
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
+
 
 void CMy3PointCircleDlg::OnLButtonUp(UINT nFlags, CPoint point)
 {
 	if (m_bIsDragging) {
 		m_bIsDragging = false;
-		m_iDragPointIndex = -1;
+		m_iDragIndex = -1;
 		ReleaseCapture();
 	}
 	CDialogEx::OnLButtonUp(nFlags, point);
@@ -300,36 +299,46 @@ void CMy3PointCircleDlg::OnLButtonUp(UINT nFlags, CPoint point)
 
 void CMy3PointCircleDlg::OnMouseMove(UINT nFlags, CPoint point)
 {
-	if (m_bIsDragging && m_iDragPointIndex != -1) {
-		m_ptClicks[m_iDragPointIndex] = point;
-		Invalidate();
+	if (m_bIsDragging && (nFlags & MK_LBUTTON) && m_iDragIndex != -1) {
+		CRect r = GetDrawRect();
+
+		int margin = m_iPointRadius;
+		point.x = max(r.left + margin, min(r.right - 1 - margin, point.x));
+		point.y = max(r.top + margin, min(r.bottom - 1 - margin, point.y));
+
+		m_ptClicks[m_iDragIndex] = point;
+		UpdateCoordUI();
+		InvalidateRect(&r, FALSE);
 	}
 	CDialogEx::OnMouseMove(nFlags, point);
 }
 
 void CMy3PointCircleDlg::OnBnClickedBtnReset()
 {
-	m_iClickCount = 0;
-	m_bIsDragging = false;
-	m_iDragPointIndex = -1;
-	GetDlgItem(IDC_STATIC_COORD)->SetWindowText(_T("초기화"));
-	Invalidate();
+	if (GetCapture() == this) ReleaseCapture();
+
+	m_bStopFlag.store(true);
+	KillTimer(TIMER_THREAD_CLEANUP);
 
 	if (m_pRandomThread) {
-		DWORD result = WaitForSingleObject(m_pRandomThread->m_hThread, 0);
-
-		if (result == WAIT_OBJECT_0) {
-			// 이미 죽어있으면 바로 삭제
+		DWORD r = WaitForSingleObject(m_pRandomThread->m_hThread, 0);
+		if (r == WAIT_OBJECT_0) {
 			delete m_pRandomThread;
 			m_pRandomThread = nullptr;
-			m_bThreadRunning = false;
 		}
 		else {
-			// 아직 살아있으면 타이머(감시자)를 고용함 (50ms마다 확인)
-			SetTimer(TIMER_THREAD_CLEANUP, 50, NULL);
+			SetTimer(TIMER_THREAD_CLEANUP, 50, nullptr);
 		}
 	}
 
+	m_bThreadRunning.store(false);
+	GetDlgItem(IDC_BTN_RANDOM)->EnableWindow(m_pRandomThread == nullptr);
+
+	m_iClickCount = 0;
+	m_bIsDragging = false;
+	m_iDragIndex = -1;
+	UpdateCoordUI();
+	Invalidate(FALSE);
 }
 
 void CMy3PointCircleDlg::OnBnClickedBtnRandom()
@@ -407,8 +416,11 @@ LRESULT CMy3PointCircleDlg::OnUpdateRandomMove(WPARAM wParam, LPARAM lParam) {
 		return 0;
 	}
 
-	for (int i = 0; i < 3; i++) m_ptClicks[i] = pData->pts[i];
+	for (int i = 0; i < 3; i++) {
+		m_ptClicks[i] = pData->pts[i];
+	}
 	delete pData;
+	UpdateCoordUI();
 
 	// Day 4에서 만든 스마트 갱신
 	CRect r = GetDrawRect();
