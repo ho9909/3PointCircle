@@ -1,0 +1,19 @@
+#include <string>
+#include <vector>
+
+using namespace std;
+
+int solution(int n, int k) {
+    int answer = 0;
+    
+    int lamb = n * 12000;
+    
+    int drink = k * 2000;
+    
+    int count = n / 10;
+    
+    int discount = count * 2000;
+    
+    answer = lamb + drink -discount;
+    return answer;
+}
