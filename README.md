@@ -56,6 +56,7 @@ MFC(Dialog 기반) 그래픽 프로그램입니다.
 ---
 
 ## 📂 프로젝트 구조
+```
 My3PointCircle
 ├─ My3PointCircleDlg.h
 │ ├─ 핵심 데이터 (점 좌표, 상태 플래그)
@@ -73,7 +74,7 @@ My3PointCircle
 └─ resource.h
 └─ 컨트롤 ID 및 타이머 ID 정의
 
----
+```
 
 ## 🧠 핵심 구현 설명
 
